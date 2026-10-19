@@ -5,7 +5,8 @@ Input Features,18 Cumulant & Spectral Features
 Number of Classes,8 (5 PSK + 3 QAM)
 Total Parameters,"11,592"
 Training Time (s),58.75
-Inference Latency (us),0.71
+Batched Throughput Latency (us/sample @ B=1000),0.71
+Single-Sample Dispatch Latency (us/sample @ B=1),~36.0
 Overall Test Accuracy (%),35.12
 Overall Test Macro-F1 (%),34.01
 Accuracy at -4 dB (%),21.88

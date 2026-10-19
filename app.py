@@ -1,11 +1,10 @@
 """
 EE136IU Capstone Mini-Project - Topic 1: Comprehensive Model Benchmark
-Interactive Live Demo Dashboard
-Author: Hai Nguyen (EE136IU)
+Interactive Live Demo Dashboard (Tier 2: 3-Layer MLP)
+Author: Hai Nguyen (EEEEIU22093)
 """
 
 import os
-import sys
 import time
 import zipfile
 import pickle
@@ -16,6 +15,27 @@ import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
+
+try:
+    from model import ModulationMLP
+except ImportError:
+    class ModulationMLP(nn.Module):
+        def __init__(self, input_dim=18, num_classes=8):
+            super(ModulationMLP, self).__init__()
+            self.network = nn.Sequential(
+                nn.Linear(input_dim, 128),
+                nn.BatchNorm1d(128),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(128, 64),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(64, num_classes)
+            )
+
+        def forward(self, x):
+            return self.network(x)
 
 # -------------------------------------------------------------
 # 1. Page Configuration
@@ -28,14 +48,17 @@ st.set_page_config(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ZIP_PATH = os.path.join(BASE_DIR, "features_train.zip") if os.path.exists(os.path.join(BASE_DIR, "features_train.zip")) else r"C:\THIS PC\My PC\Emerging\New folder\features_train.zip"
+ZIP_PATH = (
+    os.path.join(BASE_DIR, "features_train.zip")
+    if os.path.exists(os.path.join(BASE_DIR, "features_train.zip"))
+    else r"C:\THIS PC\My PC\Emerging\New folder\features_train.zip"
+)
 
-# CSS tùy chỉnh giao diện học thuật Clean White Theme
+# CSS tùy chỉnh tương thích hoàn toàn cả Light Mode và Dark Mode
 st.markdown("""
 <style>
     .main-title {
         font-family: 'Manrope', sans-serif;
-        color: var(--text-color, #FFFFFF);
         font-size: 2.2rem;
         font-weight: 800;
         margin-bottom: 0px;
@@ -73,25 +96,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# 2. Định nghĩa Model & Tải dữ liệu Cache
+# 2. Tải Model & Dữ liệu Cache
 # -------------------------------------------------------------
-class ModulationMLP(nn.Module):
-    def __init__(self, input_dim=18, num_classes=8):
-        super(ModulationMLP, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(64, num_classes)
-        )
-    def forward(self, x):
-        return self.network(x)
-
 @st.cache_resource
 def load_assets():
     with open(os.path.join(BASE_DIR, 'class_mapping.pkl'), 'rb') as f:
@@ -100,15 +106,16 @@ def load_assets():
     class_to_idx = mapping['class_to_idx']
     idx_to_class = mapping['idx_to_class']
     feature_cols = mapping['features']
-    
+
     with open(os.path.join(BASE_DIR, 'scaler.pkl'), 'rb') as f:
         scaler = pickle.load(f)
-        
+
     model = ModulationMLP(len(feature_cols), len(classes))
     model.load_state_dict(torch.load(os.path.join(BASE_DIR, 'best_mlp.pth'), map_location='cpu'))
     model.eval()
-    
+
     return classes, class_to_idx, idx_to_class, feature_cols, scaler, model
+
 
 @st.cache_data
 def load_test_data():
@@ -119,11 +126,12 @@ def load_test_data():
         with z.open('features_test.csv') as f:
             return pd.read_csv(f)
 
+
 classes, class_to_idx, idx_to_class, feature_cols, scaler, model = load_assets()
 df_test = load_test_data()
 
 # -------------------------------------------------------------
-# 3. Sidebar: Điều khiển Live Inference
+# 3. Sidebar: Điều khiển Live Inference (Đồng bộ Session State)
 # -------------------------------------------------------------
 st.sidebar.image("https://img.icons8.com/fluency/96/satellite-sending-signal.png", width=70)
 st.sidebar.markdown("### 🎛️ Bảng điều khiển tín hiệu")
@@ -136,23 +144,27 @@ selected_mod = st.sidebar.selectbox(
     index=0
 )
 
-# 2. Chọn mức SNR
-snr_options = sorted(df_test['snr_db'].unique())
+# 2. Đồng bộ nút chọn nhanh SNR và thanh trượt SNR qua st.session_state
+snr_options = sorted(int(x) for x in df_test['snr_db'].unique())
+if "selected_snr" not in st.session_state or st.session_state.selected_snr not in snr_options:
+    st.session_state.selected_snr = 4
+
+st.sidebar.markdown("#### ⚡ Chọn nhanh chế độ SNR:")
+col_b1, col_b2, col_b3 = st.sidebar.columns(3)
+if col_b1.button("-4 dB", use_container_width=True):
+    st.session_state.selected_snr = -4
+if col_b2.button("+4 dB", use_container_width=True):
+    st.session_state.selected_snr = 4
+if col_b3.button("+14 dB", use_container_width=True):
+    st.session_state.selected_snr = 14
+
 selected_snr = st.sidebar.select_slider(
     "📶 Chọn mức SNR kiểm tra (dB):",
     options=snr_options,
-    value=4
+    key="selected_snr"
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("#### ⚡ Chọn nhanh chế độ SNR:")
-col_b1, col_b2, col_b3 = st.sidebar.columns(3)
-if col_b1.button("-4 dB"):
-    selected_snr = -4
-if col_b2.button("+4 dB"):
-    selected_snr = 4
-if col_b3.button("+14 dB"):
-    selected_snr = 14
 
 # Lọc dữ liệu theo cả SNR và Modulation đã chọn
 df_subset = df_test[df_test['snr_db'] == selected_snr]
@@ -169,9 +181,14 @@ if 'sample_idx' not in st.session_state or st.session_state.sample_idx >= len(df
     st.session_state.sample_idx = 0
 
 if st.sidebar.button("🎲 Bốc mẫu tín hiệu ngẫu nhiên", use_container_width=True):
-    st.session_state.sample_idx = np.random.randint(0, len(df_subset))
+    st.session_state.sample_idx = int(np.random.randint(0, len(df_subset)))
 
-sample_idx = st.sidebar.slider("Chỉ số mẫu trong tập lọc:", 0, len(df_subset) - 1, st.session_state.sample_idx)
+sample_idx = st.sidebar.slider(
+    "Chỉ số mẫu trong tập lọc:",
+    0,
+    max(0, len(df_subset) - 1),
+    st.session_state.sample_idx
+)
 st.session_state.sample_idx = sample_idx
 
 current_sample = df_subset.iloc[sample_idx]
@@ -183,32 +200,37 @@ true_label = current_sample['modulation']
 st.markdown('<div class="main-title">EE136IU • Topic 1: Comprehensive Model Benchmark</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">📡 Wireless Intelligence & Automatic Modulation Classification (Tier 2: 3-Layer MLP)</div>', unsafe_allow_html=True)
 
-tab_live, tab_bench, tab_arch = st.tabs(["⚡ Live Model Inference", "📊 Benchmark Performance Gallery", "🧠 Network Architecture & Math"])
+tab_live, tab_bench, tab_arch = st.tabs([
+    "⚡ Live Model Inference",
+    "📊 Benchmark Performance Gallery",
+    "🧠 Network Architecture & Math"
+])
 
 with tab_live:
-    # Inference
-    x_raw = current_sample[feature_cols].values.reshape(1, -1)
+    # Inference cho 1 mẫu đơn lẻ (B=1)
+    x_raw = current_sample[feature_cols].values.astype(np.float32).reshape(1, -1)
     x_scaled = scaler.transform(x_raw)
-    
+    x_tensor = torch.from_numpy(x_scaled)
+
     t_start = time.perf_counter()
     with torch.no_grad():
-        logits = model(torch.from_numpy(x_scaled.astype(np.float32)))
+        logits = model(x_tensor)
         probs = torch.softmax(logits, dim=1).numpy()[0]
     t_end = time.perf_counter()
-    latency_us = (t_end - t_start) * 1e6
-    
-    pred_idx = np.argmax(probs)
+    single_latency_us = (t_end - t_start) * 1e6
+
+    pred_idx = int(np.argmax(probs))
     pred_label = idx_to_class[pred_idx]
     confidence = probs[pred_idx] * 100
     is_correct = (pred_label == true_label)
-    
+
     # Header Metrics Cards
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(f"""
         <div class="metric-card">
             <div style="font-size: 0.85rem; color: #64748B;">MỨC SNR KIỂM THỬ</div>
-            <div style="font-size: 1.8rem; font-weight: 800; color: #0284C7;">{selected_snr} dB</div>
+            <div style="font-size: 1.8rem; font-weight: 800; color: #0284C7;">{selected_snr:+d} dB</div>
         </div>
         """, unsafe_allow_html=True)
     with c2:
@@ -219,10 +241,10 @@ with tab_live:
         </div>
         """, unsafe_allow_html=True)
     with c3:
-        status_html = f'<span class="success-badge">✅ CHÍNH XÁC</span>' if is_correct else f'<span class="error-badge">❌ NHẦM LẪN</span>'
+        status_html = '<span class="success-badge">✅ CHÍNH XÁC</span>' if is_correct else '<span class="error-badge">❌ NHẦM LẪN</span>'
         st.markdown(f"""
         <div class="metric-card">
-            <div style="font-size: 0.85rem; color: #64748B;">DỰ ĐOÁN CỦA MLP</div>
+            <div style="font-size: 0.85rem; color: #64748B;">DỰ ĐOÁN CỦA MLP ({confidence:.1f}%)</div>
             <div style="font-size: 1.8rem; font-weight: 800; color: {'#16A34A' if is_correct else '#DC2626'};">{pred_label}</div>
             {status_html}
         </div>
@@ -230,62 +252,63 @@ with tab_live:
     with c4:
         st.markdown(f"""
         <div class="metric-card">
-            <div style="font-size: 0.85rem; color: #64748B;">TỐC ĐỘ SUY LUẬN (LATENCY)</div>
-            <div style="font-size: 1.8rem; font-weight: 800; color: #8B5CF6;">{latency_us:.2f} µs</div>
-            <div style="font-size: 0.8rem; color: #10B981; font-weight: 600;">Thời gian thực (Real-time)</div>
+            <div style="font-size: 0.85rem; color: #64748B;">ĐỘ TRỄ SUY LUẬN (LATENCY)</div>
+            <div style="font-size: 1.8rem; font-weight: 800; color: #8B5CF6;">{single_latency_us:.1f} µs</div>
+            <div style="font-size: 0.78rem; color: #10B981; font-weight: 600;">Single-burst (B=1) | 0.71 µs/burst (Batch B=1000)</div>
         </div>
         """, unsafe_allow_html=True)
-        
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Biểu đồ phân phối xác suất 8 lớp
+
+    # Biểu đồ phân phối xác suất 8 lớp & 18 đặc trưng
     col_left, col_right = st.columns([1.2, 1])
-    
+
     with col_left:
         st.subheader("🎯 Phân phối xác suất 8 loại điều chế (Softmax Confidence)")
-        
+
         df_probs = pd.DataFrame({
             'Modulation': classes,
             'Probability (%)': probs * 100
         }).sort_values(by='Probability (%)', ascending=True)
-        
+
         colors = []
         for mod in df_probs['Modulation']:
             if mod == true_label and mod == pred_label:
-                colors.append('#10B981') # Đúng: Xanh lá
+                colors.append('#10B981')  # Đúng: Xanh lá
             elif mod == pred_label and not is_correct:
-                colors.append('#EF4444') # Đoán sai: Đỏ
+                colors.append('#EF4444')  # Đoán sai: Đỏ
             elif mod == true_label and not is_correct:
-                colors.append('#F59E0B') # Thực tế bị bỏ lỡ: Vàng cam
+                colors.append('#F59E0B')  # Thực tế bị bỏ lỡ: Vàng cam
             else:
-                colors.append('#94A3B8') # Còn lại: Xám
-                
+                colors.append('#94A3B8')  # Còn lại: Xám
+
         fig_prob, ax = plt.subplots(figsize=(7, 4.5), dpi=150)
         bars = ax.barh(df_probs['Modulation'], df_probs['Probability (%)'], color=colors, height=0.6)
-        ax.set_xlim(0, 105)
+        ax.set_xlim(0, 108)
         ax.set_xlabel("Độ tin cậy xác suất (%)", fontsize=10, fontweight='bold')
         ax.grid(axis='x', linestyle='--', alpha=0.5)
-        
+
         for bar in bars:
             width = bar.get_width()
             ax.text(width + 1.5, bar.get_y() + bar.get_height()/2, f"{width:.1f}%",
                     va='center', ha='left', fontsize=9, fontweight='bold', color='#334155')
-            
+
         plt.tight_layout()
         st.pyplot(fig_prob)
         plt.close()
-        
+
     with col_right:
-        st.subheader("🔬 18 Đặc trưng vật lý của mẫu này (Radar/Bar Profile)")
+        st.subheader("🔬 18 Đặc trưng vật lý của mẫu này (Z-Score Profile)")
         feat_vals = x_scaled[0]
-        
+
         df_feat = pd.DataFrame({
             'Feature': feature_cols,
             'Normalized Value': feat_vals
         })
-        
+
         fig_feat, ax_f = plt.subplots(figsize=(7, 4.5), dpi=150)
         ax_f.bar(df_feat['Feature'], df_feat['Normalized Value'], color='#0284C7', width=0.5)
+        ax_f.set_xticks(range(len(feature_cols)))
         ax_f.set_xticklabels(feature_cols, rotation=70, ha='right', fontsize=8)
         ax_f.set_ylabel("Standardized Value (Z-Score)", fontsize=9, fontweight='bold')
         ax_f.grid(axis='y', linestyle='--', alpha=0.5)
@@ -294,11 +317,11 @@ with tab_live:
         plt.close()
 
 with tab_bench:
-    st.subheader("📈 Báo cáo thực nghiệm toàn diện trên 15 mức SNR")
-    
+    st.subheader("📈 Báo cáo thực nghiệm toàn diện trên 15 mức SNR (-10 dB đến +18 dB)")
+
     b_col1, b_col2 = st.columns(2)
     with b_col1:
-        st.markdown("**Đường cong Accuracy & Macro-F1 theo SNR (-10 dB đến +18 dB):**")
+        st.markdown("**Đường cong Accuracy & Macro-F1 theo SNR:**")
         p1 = os.path.join(BASE_DIR, "mlp_accuracy_vs_snr_large.png")
         if os.path.exists(p1):
             st.image(p1, use_container_width=True)
@@ -311,29 +334,30 @@ with tab_bench:
             st.image(p2, use_container_width=True)
         else:
             st.info("Đồ thị Macro-F1 đã được lưu trong Slide Báo Cáo")
-        
+
     st.markdown("---")
-    st.subheader("🎯 Ma trận nhầm lẫn (Confusion Matrices) tại các mốc then chốt:")
+    st.subheader("🎯 Ma trận nhầm lẫn (Confusion Matrices) & Phân tích Vật lý:")
     cm_c1, cm_c2, cm_c3 = st.columns(3)
     with cm_c1:
         p_cm1 = os.path.join(BASE_DIR, "mlp_cm_low_snr_minus4dB.png")
         if os.path.exists(p_cm1):
-            st.image(p_cm1, caption="Low SNR (-4 dB) - Nhiễu nặng", use_container_width=True)
-        else:
-            st.caption("Low SNR (-4 dB): 16QAM/64QAM/256QAM bị xoắn cụm do nhiễu.")
+            st.image(p_cm1, caption="Low SNR (-4 dB): Nhiễu AWGN áp đảo (Acc: 21.9%)", use_container_width=True)
     with cm_c2:
         p_cm2 = os.path.join(BASE_DIR, "mlp_cm_mid_snr_plus4dB.png")
         if os.path.exists(p_cm2):
-            st.image(p_cm2, caption="Mid SNR (+4 dB) - Chuyển tiếp", use_container_width=True)
-        else:
-            st.caption("Mid SNR (+4 dB): Tách hoàn toàn BPSK và QPSK.")
+            st.image(p_cm2, caption="Mid SNR (+4 dB): BPSK & QPSK tách biệt rõ (Acc: 36.5%)", use_container_width=True)
     with cm_c3:
         p_cm3 = os.path.join(BASE_DIR, "mlp_cm_high_snr_plus14dB.png")
         if os.path.exists(p_cm3):
-            st.image(p_cm3, caption="High SNR (+14 dB) - Sóng khỏe", use_container_width=True)
-        else:
-            st.caption("High SNR (+14 dB): Tách rời các chòm sao PSK bậc cao.")
-        
+            st.image(p_cm3, caption="High SNR (+14 dB): Chạm trần lý thuyết Cumulant ~48.8%", use_container_width=True)
+
+    st.info("""
+    💡 **Giải thích Vật lý vì sao Accuracy hội tụ ở mức ~48.8% tại SNR cao (+14 dB đến +18 dB):**
+    1. **Nhóm hoàn hảo (100% Accuracy):** `BPSK` và `QPSK` có cumulant bậc 4 ($|C_{40}| = 1.0$) và entropy pha khác biệt hoàn toàn nên MLP nhận diện đúng 100%.
+    2. **Trần lý thuyết của $M$-PSK bậc cao (`8PSK`, `16PSK`, `32PSK`):** Về mặt toán học, mọi điều chế đối xứng vòng tròn với $M \\ge 8$ đều có cumulant bậc 4 và bậc 6 lý thuyết **bằng nhau hệt** ($|C_{40}| = 0, |C_{42}| = 1$). Do đó, bộ 18 đặc trưng thống kê bị suy biến (feature degeneracy) giữa 3 lớp này.
+    3. **Sự chồng lấn của QAM mật độ cao (`16QAM`, `64QAM`, `256QAM`):** Với chiều dài gói sóng ngắn ($L = 128$ mẫu), phương sai ước lượng mẫu của cumulant lớn hơn khoảng cách lý thuyết nhỏ giữa $16/64/256\\text{-QAM}$ ($|C_{40}| \\approx 0.68, 0.62, 0.61$), dẫn đến nhầm lẫn nội bộ trong họ QAM.
+    """)
+
     st.markdown("---")
     st.subheader("📋 Bảng thông số đo đạc kỹ thuật (Executive Summary):")
     df_exec = pd.read_csv(os.path.join(BASE_DIR, "mlp_executive_summary.csv"))
@@ -342,18 +366,15 @@ with tab_bench:
 with tab_arch:
     st.subheader("🧠 Cấu trúc toán học & Thiết kế mạng 3-Layer MLP")
     st.markdown("""
-    * **Kiến trúc mạng:**
-      $$\\text{Input } (x \\in \\mathbb{R}^{18}) \\xrightarrow{W_1} \\text{Linear}(128) \\rightarrow \\text{BatchNorm} \\rightarrow \\text{ReLU} \\xrightarrow{W_2} \\text{Linear}(64) \\rightarrow \\text{BatchNorm} \\rightarrow \\text{ReLU} \\xrightarrow{W_3} \\text{Linear}(8)$$
-    * **Hàm mất mát (Objective Loss):**
-      $$J(\\theta) = -\\sum_{c=1}^{8} y_c \\ln(p_c) + \\frac{1}{2}\\lambda \\|W\\|_2^2$$
-    * **Bộ tối ưu (Optimizer):** `Adam` (Learning rate $\\eta = 10^{-3}$, weight decay $\\lambda = 10^{-4}$).
-    * **Tại sao MLP vượt trội hơn SVM trong bài toán này?**
-      * Thời gian suy luận chỉ **1.54 µs** (nhanh hơn SVM đa lớp với kernel RBF).
-      * Tầng ẩn thứ 2 học được tương tác phi tuyến bậc cao giữa các cumulants ($C_{40}, C_{42}$) hiệu quả hơn các hàm nhân cổ điển.
+    * **Kiến trúc mạng (`11,592` tham số huấn luyện):**
+      $$\\text{Input } (x \\in \\mathbb{R}^{18}) \\xrightarrow{W^{(1)}} \\text{Linear}(128) \\rightarrow \\text{BatchNorm1d} \\rightarrow \\text{ReLU} \\rightarrow \\text{Dropout}(0.2) \\xrightarrow{W^{(2)}} \\text{Linear}(64) \\rightarrow \\text{BatchNorm1d} \\rightarrow \\text{ReLU} \\rightarrow \\text{Dropout}(0.2) \\xrightarrow{W^{(3)}} \\text{Linear}(8)$$
+    * **Hàm mục tiêu (Cross-Entropy + L2 Weight Decay):**
+      $$\\mathcal{L}(\\theta) = -\\sum_{c=1}^{8} y_c \\ln(p_c) + \\frac{\\lambda}{2} \\|\\theta\\|_2^2$$
+    * **Bộ tối ưu (Optimizer):** `Adam` (Learning rate $\\eta = 10^{-3}$, weight decay $\\lambda = 10^{-4}$ áp trên tham số $\\theta$, kết hợp `ReduceLROnPlateau`).
+    * **Phân biệt 2 chế độ đo Độ trễ suy luận (Inference Latency):**
+      * **Batched Throughput Latency ($B = 1000$ mẫu/lần):** Trung bình **0.71 µs / mẫu** nhờ vector hóa ma trận song song trên CPU.
+      * **Single-Sample Dispatch Latency ($B = 1$ mẫu đơn lẻ):** Khoảng **30 – 40 µs / mẫu** trên máy cá nhân (bao gồm chi phí gọi hàm Python/PyTorch wrapper cho từng gói rời rạc).
     """)
     p_loss = os.path.join(BASE_DIR, "mlp_loss_history.png")
     if os.path.exists(p_loss):
-        st.image(p_loss, caption="Quá trình hội tụ của hàm mất mát qua 35 Epochs", width=700)
-    else:
-        st.info("Mô hình hội tụ tại Epoch 33 với validation loss nhỏ nhất.")
-
+        st.image(p_loss, caption="Quá trình hội tụ của hàm mất mát qua 35 Epochs (Best Checkpoint tại Epoch 33)", width=700)
