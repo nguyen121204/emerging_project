@@ -1,5 +1,5 @@
 # EE136IU Capstone Mini-Project - Topic 1: MLP Benchmark
-**Author:** Hai Nguyen (Student ID: EEEEIU22093)  
+**Authors:** Hai Nguyen (EEEEIU22093), Van Thao Minh (EEEEIU22097)  
 **Course:** EE136IU - Machine Learning for Wireless Communication  
 **Instructor:** Dr. Huynh Vo Trung Dung  
 
