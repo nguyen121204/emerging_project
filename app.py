@@ -35,7 +35,7 @@ st.markdown("""
 <style>
     .main-title {
         font-family: 'Manrope', sans-serif;
-        color: #0F172A;
+        color: var(--text-color, #FFFFFF);
         font-size: 2.2rem;
         font-weight: 800;
         margin-bottom: 0px;
