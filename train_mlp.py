@@ -235,14 +235,42 @@ def main():
         acc_snr = accuracy_score(y_test[mask], test_preds[mask])
         f1_snr = f1_score(y_test[mask], test_preds[mask], average='macro')
         snr_results.append({
-            'SNR_dB': snr,
-            'Accuracy': acc_snr,
-            'Macro_F1': f1_snr,
-            'Sample_Count': int(np.sum(mask))
+            'SNR_dB': int(snr),
+            'Accuracy': acc_snr * 100,
+            'Macro_F1': f1_snr * 100,
+            'Count': int(np.sum(mask))
         })
 
     df_snr_results = pd.DataFrame(snr_results)
     df_snr_results.to_csv(os.path.join(OUTPUT_DIR, 'mlp_snr_benchmark_verified.csv'), index=False)
+
+    # Xuất bảng Executive Summary
+    summary_data = {
+        'Metric': [
+            'Model Tier', 'Architecture', 'Input Features', 'Number of Classes',
+            'Total Parameters', 'Training Time (s)',
+            'Batched Throughput Latency (us/sample @ B=1000)',
+            'Single-Sample Dispatch Latency (us/sample @ B=1)',
+            'Overall Test Accuracy (%)', 'Overall Test Macro-F1 (%)',
+            'Accuracy at -4 dB (%)', 'Accuracy at +4 dB (%)', 'Accuracy at +14 dB (%)'
+        ],
+        'Value': [
+            'Tier 2: Neural Network on Features',
+            '3-Layer MLP (18 -> 128 -> 64 -> 8)',
+            '18 Cumulant & Spectral Features',
+            '8 (5 PSK + 3 QAM)',
+            f"{total_params:,}",
+            f"{total_train_time:.2f}",
+            f"{batched_latency_us:.2f}",
+            f"~{single_latency_us:.1f}",
+            f"{overall_acc*100:.2f}",
+            f"{overall_f1*100:.2f}",
+            f"{df_snr_results.loc[df_snr_results['SNR_dB'] == -4, 'Accuracy'].values[0]:.2f}",
+            f"{df_snr_results.loc[df_snr_results['SNR_dB'] == 4, 'Accuracy'].values[0]:.2f}",
+            f"{df_snr_results.loc[df_snr_results['SNR_dB'] == 14, 'Accuracy'].values[0]:.2f}"
+        ]
+    }
+    pd.DataFrame(summary_data).to_csv(os.path.join(OUTPUT_DIR, 'mlp_executive_summary.csv'), index=False)
 
 
 if __name__ == "__main__":

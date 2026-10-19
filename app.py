@@ -345,17 +345,19 @@ with tab_bench:
     with cm_c2:
         p_cm2 = os.path.join(BASE_DIR, "mlp_cm_mid_snr_plus4dB.png")
         if os.path.exists(p_cm2):
-            st.image(p_cm2, caption="Mid SNR (+4 dB): BPSK & QPSK tách biệt rõ (Acc: 36.5%)", use_container_width=True)
+            st.image(p_cm2, caption="Mid SNR (+4 dB): BPSK tách rõ (98%), QPSK đạt 57% (Acc: 36.5%)", use_container_width=True)
     with cm_c3:
         p_cm3 = os.path.join(BASE_DIR, "mlp_cm_high_snr_plus14dB.png")
         if os.path.exists(p_cm3):
-            st.image(p_cm3, caption="High SNR (+14 dB): Chạm trần lý thuyết Cumulant ~48.8%", use_container_width=True)
+            st.image(p_cm3, caption="High SNR (+14 dB): Chạm trần bộ 18 đặc trưng ~48.8%", use_container_width=True)
 
     st.info("""
-    💡 **Giải thích Vật lý vì sao Accuracy hội tụ ở mức ~48.8% tại SNR cao (+14 dB đến +18 dB):**
-    1. **Nhóm hoàn hảo (100% Accuracy):** `BPSK` và `QPSK` có cumulant bậc 4 ($|C_{40}| = 1.0$) và entropy pha khác biệt hoàn toàn nên MLP nhận diện đúng 100%.
-    2. **Trần lý thuyết của $M$-PSK bậc cao (`8PSK`, `16PSK`, `32PSK`):** Về mặt toán học, mọi điều chế đối xứng vòng tròn với $M \\ge 8$ đều có cumulant bậc 4 và bậc 6 lý thuyết **bằng nhau hệt** ($|C_{40}| = 0, |C_{42}| = 1$). Do đó, bộ 18 đặc trưng thống kê bị suy biến (feature degeneracy) giữa 3 lớp này.
-    3. **Sự chồng lấn của QAM mật độ cao (`16QAM`, `64QAM`, `256QAM`):** Với chiều dài gói sóng ngắn ($L = 128$ mẫu), phương sai ước lượng mẫu của cumulant lớn hơn khoảng cách lý thuyết nhỏ giữa $16/64/256\\text{-QAM}$ ($|C_{40}| \\approx 0.68, 0.62, 0.61$), dẫn đến nhầm lẫn nội bộ trong họ QAM.
+    💡 **Giải thích Toán – Vật lý vì sao Accuracy hội tụ ở mức `48.75%` tại SNR cao (+14 dB):**
+    1. **Nhóm bậc thấp (`BPSK` đạt 100%, `QPSK` đạt 86%):** Với tín hiệu chuẩn hóa công suất, `BPSK` có $|C_{40}| = 2.0$ và `QPSK` có $|C_{40}| = 1.0$ tách biệt rõ. `QPSK` bị giảm nhẹ (còn 86% ở +14 dB và 57% ở +4 dB) do kênh pha-đinh đa đường `Rayleigh3Tap` làm xoay pha chòm sao.
+    2. **Giới hạn của bộ 18 đặc trưng trên $M$-PSK bậc cao (`8PSK`, `16PSK`, `32PSK`):** Ở bậc cumulant $\\le 6$, mọi điều chế $M$-PSK với $M \\ge 8$ đều có trị lý thuyết bằng nhau ($|C_{40}| = 0, |C_{42}| = 1, |C_{60}| = 0$). Do bộ 18 features chỉ dừng ở bậc 6 (chưa dùng tới $C_{80}$), 3 lớp này chỉ phân biệt ngẫu nhiên trong nội bộ nhóm (đóng góp $\\approx 3 \\times \\frac{1}{3} = 1.0$ lớp đúng).
+    3. **Sự chồng lấn trong nhóm QAM (`16QAM`, `64QAM`, `256QAM`):** Với gói sóng ngắn $L = 128$ mẫu, phương sai ước lượng mẫu làm nhòe khoảng cách cumulant nhỏ giữa 3 bậc QAM ($|C_{40}| \\approx 0.68, 0.62, 0.61$), nên nhóm 3 lớp QAM này cũng đóng góp $\\approx 3 \\times \\frac{1}{3} = 1.0$ lớp đúng.
+    4. **Kiểm chứng công thức kỳ vọng Toán học:**
+       $$\\text{Expected Accuracy (+14 dB)} \\approx \\frac{\\underbrace{1.00}_{\\text{BPSK}} + \\underbrace{0.86}_{\\text{QPSK}} + \\underbrace{1.00}_{\\text{3 lớp } M\\text{-PSK}} + \\underbrace{1.00}_{\\text{3 lớp QAM}}}{8} = \\frac{3.86}{8} = \\mathbf{48.25\\%} \\quad (\\text{Thực tế đo được: } \\mathbf{48.75\\%}!)$$
     """)
 
     st.markdown("---")

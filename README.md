@@ -15,10 +15,12 @@
 This repository contains the complete implementation, pre-trained weights, benchmark evaluations, and an interactive Streamlit live dashboard for **Tier 2: 3-Layer Multilayer Perceptron (MLP)** (`11,592` trainable parameters) for Automatic Modulation Classification (AMC) across 8 modulation schemes (`BPSK`, `QPSK`, `8PSK`, `16PSK`, `32PSK`, `16QAM`, `64QAM`, `256QAM`) on 18 physical domain features.
 
 ### Key Empirical & Theoretical Findings:
-1. **Overall Accuracy (`35.12%` across -10 dB to +18 dB) & High-SNR Ceiling (`~48.8%` at $\ge +10\text{ dB}$):**
-   - `BPSK` and `QPSK` reach **100% classification accuracy** at high SNR due to distinct 4th-order cumulants ($|C_{40}| = 1.0$) and phase entropy.
-   - **Theoretical Cumulant Degeneracy for $M \ge 8$ PSK:** Higher-order phase modulations (`8PSK`, `16PSK`, `32PSK`) possess identical theoretical 4th- and 6th-order cumulant magnitudes ($|C_{40}| = 0, |C_{42}| = 1$), creating an information-theoretic identifiability ceiling on the 18 handcrafted features.
-   - **Finite-Sample Variance in Dense QAM:** Over short $L=128$-sample bursts, estimation variance blurs the small theoretical cumulant gaps between `16QAM`, `64QAM`, and `256QAM` ($|C_{40}| \approx 0.68, 0.62, 0.61$).
+1. **Overall Accuracy (`35.12%` across -10 dB to +18 dB) & High-SNR Feature-Set Ceiling (`48.75%` at $+14\text{ dB}$):**
+   - **Low-Order Modulations (`BPSK`: 100%, `QPSK`: 86% at $+14\text{ dB}$):** Under unit-power normalization, `BPSK` has $|C_{40}| = 2.0$ ($C_{40} = -2$) and `QPSK` has $|C_{40}| = 1.0$, making them well separated. `QPSK` reaches 86% at $+14\text{ dB}$ (and 57% at $+4\text{ dB}$, while `BPSK` is 98%) due to uncompensated phase rotations under `Rayleigh3Tap` multipath fading.
+   - **18-Feature Set Ceiling for $M \ge 8$ PSK:** Higher-order phase modulations (`8PSK`, `16PSK`, `32PSK`) share identical theoretical 4th- and 6th-order cumulant magnitudes ($|C_{40}| = 0, |C_{42}| = 1, |C_{60}| = 0$). Because the 18-feature set stops at 6th-order cumulants (without 8th-order $C_{80}$), these 3 classes experience intra-group confusion (contributing $\approx 3 \times \frac{1}{3} = 1.0$ correct class).
+   - **Finite-Sample Variance in Dense QAM:** Over short $L=128$-sample bursts, sample estimation variance blurs the small theoretical cumulant gaps between `16QAM`, `64QAM`, and `256QAM` ($|C_{40}| \approx 0.68, 0.62, 0.61$), contributing $\approx 3 \times \frac{1}{3} = 1.0$ correct class.
+   - **Mathematical Verification of the High-SNR Accuracy Ceiling:**
+     $$\text{Acc}_{\text{expected}}(+14\text{ dB}) \approx \frac{1.00\text{ (BPSK)} + 0.86\text{ (QPSK)} + 1.00\text{ (3 }M\text{-PSK)} + 1.00\text{ (3 QAM)}}{8} = \frac{3.86}{8} = \mathbf{48.25\%} \quad (\text{Empirical: } \mathbf{48.75\%})$$
 2. **Inference Latency (Batched vs. Single-Sample):**
    - **Batched Throughput Latency ($B = 1000$):** `0.71 µs / burst` (vectorized matrix multiplication).
    - **Single-Burst Dispatch Latency ($B = 1$):** `~36 µs / burst` (including Python/PyTorch single-call dispatch overhead).
@@ -37,49 +39,19 @@ This repository contains the complete implementation, pre-trained weights, bench
 
 ---
 
-## 🚀 Quick Start for Teammates (Tested & Ready to Import)
+## 🚀 Quick Start for Teammates
 
-### Option 1: One-Line Loader via `model.py`
 ```python
 import torch
-import numpy as np
 from model import load_pretrained_mlp
 
-# 1. Load model, scaler, and mapping dictionary
+# 1. Load model, scaler, and label mapping in 1 line
 model, scaler, mapping = load_pretrained_mlp()
-idx_to_class = mapping["idx_to_class"]
-feature_cols = mapping["features"]
 
-# 2. Predict on a 18-feature burst (shape: [1, 18])
-x_raw = np.zeros((1, 18), dtype=np.float32)  # replace with actual 18 features
-x_scaled = scaler.transform(x_raw)
-
-with torch.no_grad():
-    logits = model(torch.from_numpy(x_scaled.astype(np.float32)))
-    probs = torch.softmax(logits, dim=-1)
-    pred_idx = int(torch.argmax(probs, dim=-1).item())
-    prediction = idx_to_class[pred_idx]
-
-print("Predicted Modulation:", prediction)
-```
-
-### Option 2: Manual PyTorch Loading
-```python
-import pickle
-import torch
-from model import ModulationMLP
-
-scaler = pickle.load(open("scaler.pkl", "rb"))
-mapping = pickle.load(open("class_mapping.pkl", "rb"))
-
-model = ModulationMLP(input_dim=18, num_classes=8)
-model.load_state_dict(torch.load("best_mlp.pth", map_location="cpu"))
-model.eval()
-
-# Inference
-X_scaled = scaler.transform(X_raw_18_features)
+# 2. Predict on 18 features (X_raw shape: [N, 18])
+X_scaled = scaler.transform(X_raw)
 with torch.no_grad():
     logits = model(torch.tensor(X_scaled, dtype=torch.float32))
     probs = torch.softmax(logits, dim=-1)
-    pred_class = mapping["idx_to_class"][int(torch.argmax(probs).item())]
+    pred_class = mapping["idx_to_class"][int(torch.argmax(probs, dim=-1)[0])]
 ```
